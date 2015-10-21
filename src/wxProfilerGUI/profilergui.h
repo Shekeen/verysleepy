@@ -74,7 +74,6 @@ public:
 	wxString symSearchPath;
 	bool useSymServer;
 	wxString symCacheDir;
-	wxString symServer;
 	int saveMinidump; // Save minidump after X seconds. -1 = disabled
 	int throttle;
 	bool useWine;
@@ -87,16 +86,6 @@ public:
 			if (!sympath.empty())
 				sympath += L";";
 			sympath += symSearchPath;
-		}
-
-		if (useSymServer)
-		{
-			if (!sympath.empty())
-				sympath += L";";
-			sympath += L"SRV*";
-			sympath += symCacheDir;
-			if ( download )
-				sympath += std::wstring(L"*") + symServer;
 		}
 	}
 };

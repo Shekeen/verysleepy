@@ -26,6 +26,7 @@ http://www.gnu.org/copyleft/gpl.html.
 #include <wx/valnum.h>
 #include <wx/slider.h>
 #include <wx/stattext.h>
+#include <wx/textdlg.h>
 
 class wxPercentSlider : public wxSlider
 {
@@ -64,6 +65,11 @@ enum OptionsId
 	Options_SymPath_Remove,
 	Options_SymPath_MoveUp,
 	Options_SymPath_MoveDown,
+  Options_SrvPath,
+  Options_SrvPath_Add,
+  Options_SrvPath_Remove,
+  Options_SrvPath_MoveUp,
+  Options_SrvPath_MoveDown,
 	Options_SaveMinidump,
 };
 
@@ -75,6 +81,11 @@ EVT_BUTTON(Options_SymPath_Add, OptionsDlg::OnSymPathAdd)
 EVT_BUTTON(Options_SymPath_Remove, OptionsDlg::OnSymPathRemove)
 EVT_BUTTON(Options_SymPath_MoveUp, OptionsDlg::OnSymPathMoveUp)
 EVT_BUTTON(Options_SymPath_MoveDown, OptionsDlg::OnSymPathMoveDown)
+EVT_LISTBOX(Options_SrvPath, OptionsDlg::OnSrvPath)
+EVT_BUTTON(Options_SrvPath_Add, OptionsDlg::OnSrvPathAdd)
+EVT_BUTTON(Options_SrvPath_Remove, OptionsDlg::OnSrvPathRemove)
+EVT_BUTTON(Options_SrvPath_MoveUp, OptionsDlg::OnSrvPathMoveUp)
+EVT_BUTTON(Options_SrvPath_MoveDown, OptionsDlg::OnSrvPathMoveDown)
 EVT_CHECKBOX(Options_SaveMinidump, OptionsDlg::OnSaveMinidump)
 END_EVENT_TABLE()
 
@@ -119,10 +130,38 @@ OptionsDlg::OptionsDlg()
 	symPathSizer->Add(symPaths, 100, wxEXPAND);
 	symPathSizer->Add(symPathButtonSizer, 1, wxSHRINK);
 
-	useSymServer = new wxCheckBox(this, Options_UseSymServer, "Use symbol server");
+	useSymServer = new wxCheckBox(this, Options_UseSymServer, "Use symbol servers");
 	symCacheDir = new wxDirPickerCtrl(this, -1, prefs.symCacheDir, "Select a directory to store local symbols in:",
 		wxDefaultPosition, wxDefaultSize, wxDIRP_USE_TEXTCTRL);
-	symServer = new wxTextCtrl(this, -1, prefs.symServer);
+  
+  srvPaths = new wxListBox(this, Options_SrvPath, wxDefaultPosition, wxSize(-1, 75), 0, NULL, wxLB_SINGLE | wxLB_NEEDED_SB);
+
+  wxBoxSizer *srvPathSizer = new wxBoxSizer(wxHORIZONTAL);
+  wxBoxSizer *srvPathButtonSizer = new wxBoxSizer(wxVERTICAL);
+
+  static const struct { wxButton * OptionsDlg::* button; OptionsId id; const wchar_t *icon; const char *tip; } srvPathButtons[] = {
+    { &OptionsDlg::srvPathAdd     , Options_SrvPath_Add     , L"button_add"   , "Add a new symbol server"   },
+    { &OptionsDlg::srvPathRemove  , Options_SrvPath_Remove  , L"button_remove", "Remove selected server"    },
+    { &OptionsDlg::srvPathMoveUp  , Options_SrvPath_MoveUp  , L"button_up"    , "Move selected server up"   },
+    { &OptionsDlg::srvPathMoveDown, Options_SrvPath_MoveDown, L"button_down"  , "Move selected server down" },
+  };
+
+  for (size_t n = 0; n < _countof(srvPathButtons); n++)
+  {
+    wxButton *b = this->*srvPathButtons[n].button = new wxButton(
+      this,
+      srvPathButtons[n].id,
+      wxEmptyString,
+      wxDefaultPosition,
+      wxSize(20, 20),
+      wxBU_EXACTFIT);
+    b->SetBitmap(LoadPngResource(srvPathButtons[n].icon));
+    b->SetToolTip(srvPathButtons[n].tip);
+    srvPathButtonSizer->Add(b, 1);
+  }
+  
+  srvPathSizer->Add(srvPaths, 100, wxEXPAND);
+  srvPathSizer->Add(srvPathButtonSizer, 1, wxSHRINK);
 
 	wxBoxSizer *minGwDbgHelpSizer = new wxBoxSizer(wxHORIZONTAL);
 	minGwDbgHelpSizer->Add(new wxStaticText(this, -1, "MinGW DbgHelp engine:   "));
@@ -162,19 +201,27 @@ OptionsDlg::OptionsDlg()
 	saveMinidumpSizer->Add(saveMinidumpTime, 0, wxTOP, -3);
 	saveMinidumpSizer->Add(new wxStaticText(this, -1, " seconds"));
 
-	symPaths->Append(wxSplit(prefs.symSearchPath, ';', 0));
+  wxArrayString symSearchPaths = wxSplit(prefs.symSearchPath, ';', 0);
+  for (size_t i = 0; i < symSearchPaths.GetCount(); ++i)
+  {
+    if (symSearchPaths[i].StartsWith(L"SRV*"))
+      srvPaths->Append(wxSplit(symSearchPaths[i], '*', 0)[2]);
+    else
+      symPaths->Append(symSearchPaths[i]);
+  }
+
 	useSymServer->SetValue(prefs.useSymServer);
 	symCacheDir->Enable(prefs.useSymServer);
-	symServer->Enable(prefs.useSymServer);
 	saveMinidump->SetValue(prefs.saveMinidump >= 0);
 
-	symdirsizer->Add(symPathSizer, 0, wxALL|wxEXPAND, 5);
+  UpdateSrvPathButtons();
+
+  symdirsizer->Add(symPathSizer, 0, wxALL | wxEXPAND, 5);
 
 	symsrvsizer->Add(useSymServer, 0, wxALL, 5);
+  symsrvsizer->Add(srvPathSizer, 0, wxALL|wxEXPAND, 5);
 	symsrvsizer->Add(new wxStaticText(this, -1, "Local cache directory:"), 0, wxLEFT|wxTOP, 5);
 	symsrvsizer->Add(symCacheDir, 0, wxALL|wxEXPAND, 5);
-	symsrvsizer->Add(new wxStaticText(this, -1, "Symbol server location:"), 0, wxLEFT|wxTOP, 5);
-	symsrvsizer->Add(symServer, 0, wxALL|wxEXPAND, 5);
 
 	symsizer->Add(symdirsizer, 0, wxALL|wxEXPAND, 5);
 	symsizer->Add(symsrvsizer, 0, wxALL|wxEXPAND, 5);
@@ -213,10 +260,9 @@ void OptionsDlg::OnOk(wxCommandEvent& event)
 {
 	if ( Validate() && TransferDataFromWindow() )
 	{
-		prefs.symSearchPath = wxJoin(symPaths->GetStrings(), ';', 0);
+    prefs.symSearchPath = ConstructSymSearchPath();
 		prefs.useSymServer = useSymServer->GetValue();
 		prefs.symCacheDir = symCacheDir->GetPath();
-		prefs.symServer = symServer->GetValue();
 		prefs.useWine = mingwWine->GetValue();
 		prefs.saveMinidump = saveMinidump->GetValue() ? saveMinidumpTimeValue : -1;
 		prefs.throttle = throttle->GetValue();
@@ -228,7 +274,8 @@ void OptionsDlg::OnUseSymServer(wxCommandEvent& event)
 {
 	bool enabled = useSymServer->GetValue();
 	symCacheDir->Enable(enabled);
-	symServer->Enable(enabled);
+  srvPaths->Enable(enabled);
+  UpdateSrvPathButtons();
 }
 
 void OptionsDlg::UpdateSymPathButtons()
@@ -284,7 +331,91 @@ void OptionsDlg::OnSymPathMoveDown( wxCommandEvent & event )
 	UpdateSymPathButtons();
 }
 
+void OptionsDlg::UpdateSrvPathButtons()
+{
+  if (useSymServer->IsChecked()) {
+    int sel = srvPaths->GetSelection();
+    srvPathAdd->Enable(true);
+    srvPathRemove->Enable(sel >= 0);
+    srvPathMoveUp->Enable(sel > 0);
+    srvPathMoveDown->Enable(sel >= 0 && sel < (int)srvPaths->GetCount() - 1);
+  }
+  else {
+    srvPathAdd->Enable(false);
+    srvPathRemove->Enable(false);
+    srvPathMoveUp->Enable(false);
+    srvPathMoveDown->Enable(false);
+  }
+}
+
+void OptionsDlg::OnSrvPath(wxCommandEvent & event)
+{
+  UpdateSrvPathButtons();
+}
+
+void OptionsDlg::OnSrvPathAdd(wxCommandEvent & event)
+{
+  wxTextEntryDialog dlg(this, "Enter a symbol server address.");
+  if (dlg.ShowModal() == wxID_OK)
+  {
+    int sel = srvPaths->Append(dlg.GetValue());
+    srvPaths->Select(sel);
+    UpdateSrvPathButtons();
+  }
+}
+
+void OptionsDlg::OnSrvPathRemove(wxCommandEvent & event)
+{
+  int sel = srvPaths->GetSelection();
+  srvPaths->Delete(sel);
+  if (sel < (int)srvPaths->GetCount())
+    srvPaths->Select(sel);
+  UpdateSrvPathButtons();
+}
+
+void OptionsDlg::OnSrvPathMoveUp(wxCommandEvent & event)
+{
+  int sel = srvPaths->GetSelection();
+  wxString s = srvPaths->GetString(sel);
+  srvPaths->Delete(sel);
+  srvPaths->Insert(s, sel - 1);
+  srvPaths->Select(sel - 1);
+  UpdateSrvPathButtons();
+}
+
+void OptionsDlg::OnSrvPathMoveDown(wxCommandEvent & event)
+{
+  int sel = srvPaths->GetSelection();
+  wxString s = srvPaths->GetString(sel);
+  srvPaths->Delete(sel);
+  srvPaths->Insert(s, sel + 1);
+  srvPaths->Select(sel + 1);
+  UpdateSrvPathButtons();
+}
+
 void OptionsDlg::OnSaveMinidump( wxCommandEvent & event )
 {
 	saveMinidumpTime->Enable(saveMinidump->IsChecked());
+}
+
+wxString OptionsDlg::ConstructSymSearchPath()
+{
+  wxString localSymSearchPath = wxJoin(symPaths->GetStrings(), ';', 0);
+
+  if (!useSymServer->IsChecked())
+    return localSymSearchPath;
+
+  wxString symCache = symCacheDir->GetPath();
+  wxArrayString serverSymSearchPaths;
+  wxArrayString servers = srvPaths->GetStrings();
+  for (size_t i = 0; i < servers.GetCount(); ++i)
+    serverSymSearchPaths.Add(L"SRV*" + symCache + L"*" + servers[i]);
+  wxString serverSymSearchPath = wxJoin(serverSymSearchPaths, ';', 0);
+
+  if (localSymSearchPath.IsEmpty())
+    return serverSymSearchPath;
+  else if (serverSymSearchPath.IsEmpty())
+    return localSymSearchPath;
+  else
+    return localSymSearchPath + L";" + serverSymSearchPath;
 }

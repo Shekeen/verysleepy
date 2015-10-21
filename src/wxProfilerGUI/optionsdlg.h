@@ -46,13 +46,22 @@ private:
 	void OnSymPathMoveUp( wxCommandEvent & event );
 	void OnSymPathMoveDown( wxCommandEvent & event );
 	void OnUseSymServer( wxCommandEvent & event );
-	void OnSaveMinidump( wxCommandEvent & event );
+  void UpdateSrvPathButtons();
+  void OnSrvPath( wxCommandEvent & event );
+  void OnSrvPathAdd( wxCommandEvent & event );
+  void OnSrvPathRemove( wxCommandEvent & event );
+  void OnSrvPathMoveUp( wxCommandEvent & event );
+  void OnSrvPathMoveDown( wxCommandEvent & event );
+  void OnSaveMinidump( wxCommandEvent & event );
+
+  wxString ConstructSymSearchPath();
 
 	wxListBox *symPaths;
 	wxButton *symPathAdd, *symPathRemove, *symPathMoveUp, *symPathMoveDown;
 	wxCheckBox *useSymServer;
+  wxListBox *srvPaths;
+  wxButton *srvPathAdd, *srvPathRemove, *srvPathMoveUp, *srvPathMoveDown;
 	wxDirPickerCtrl *symCacheDir;
-	wxTextCtrl *symServer;
 	wxCheckBox *saveMinidump;
 	wxTextCtrl *saveMinidumpTime;
 	wxRadioButton *mingwWine;
